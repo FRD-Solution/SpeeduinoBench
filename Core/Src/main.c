@@ -19,8 +19,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "usb_device.h"
-#include "usbd_cdc_if.h"
-#include <stdio.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -44,6 +42,8 @@
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
 
+TIM_HandleTypeDef htim2;
+
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -52,6 +52,7 @@ ADC_HandleTypeDef hadc1;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -62,7 +63,17 @@ uint16_t ValPot;
 uint16_t Counter = 0;
 
 int _write(int file, char *ptr, int len) {
-    CDC_Transmit_FS((uint8_t*) ptr, len); return len;
+	CDC_Transmit_FS((uint8_t*) ptr, len); return len;
+}
+
+void us_delay(uint16_t delay)
+{
+	__HAL_TIM_SET_COUNTER(&htim2, 0);
+	uint16_t counterValue = __HAL_TIM_GET_COUNTER(&htim2);
+	while(counterValue < delay)
+	{
+		counterValue = __HAL_TIM_GET_COUNTER(&htim2);
+	}
 }
 /* USER CODE END 0 */
 
@@ -100,19 +111,39 @@ int main(void)
   MX_GPIO_Init();
   MX_ADC1_Init();
   MX_USB_DEVICE_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
   HAL_ADC_Start(&hadc1);
+  HAL_TIM_Base_Start(&htim2);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  uint16_t rpmDelay = 1000;
   while (1)
-    {
+  {
+    /* USER CODE END WHILE */
 	  HAL_ADC_PollForConversion(&hadc1, 1000);
 	  ValPot = HAL_ADC_GetValue(&hadc1);
-      printf("ADC = %d \r\n", ValPot);
-      HAL_Delay(100);
-    }
+	  rpmDelay = (ValPot / 5) + 90;
+	  //printf("ADC = %d \r\n", ValPot);
+	  for(uint8_t i = 0; i<36;i++)
+	  {
+		  if(i < 35)
+	      {
+	      	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, 1);
+	      	us_delay(rpmDelay);
+	      	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, 0);
+	      	us_delay(rpmDelay);
+	      }
+	      else
+	      {
+	    	  us_delay(2 * rpmDelay);
+	      }
+	  }
+    /* USER CODE BEGIN 3 */
+  }
   /* USER CODE END 3 */
 }
 
@@ -207,6 +238,51 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 72-1;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 65536-1;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
 
 }
 
